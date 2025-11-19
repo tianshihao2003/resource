@@ -1,75 +1,339 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>我的资源库 | 一键直达</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>资源库 · tianshihao2003/resource</title>
+
+  <!-- Tailwind CDN (用于快速样式) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 2rem; background: #f8f9fa; color: #333; }
-    header { text-align: center; margin-bottom: 2rem; }
-    .file-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; }
-    .file-card { background: white; border-radius: 10px; padding: 1.2rem; box-shadow: 0 3px 10px rgba(0,0,0,0.1); transition: transform 0.2s; }
-    .file-card:hover { transform: translateY(-5px); }
-    .file-card h3 { margin-top: 0; color: #1890ff; }
-    .file-card a { color: #52c41a; text-decoration: none; }
-    .file-card a:hover { text-decoration: underline; }
-    footer { text-align: center; margin-top: 3rem; color: #8c8c8c; font-size: 0.9rem; }
+    /* 简单的模态和滚动样式微调 */
+    .modal-backdrop { background: rgba(0,0,0,0.55); }
+    .truncate-2 { display: -webkit-box; -webkit-line-clamp:2; -webkit-box-orient: vertical; overflow: hidden; }
   </style>
 </head>
-<body>
-  <header>
-    <h1>🚀 我的个人资源库</h1>
-    <p>点击文件名即可下载，所有资源实时同步GitHub仓库</p>
-  </header>
+<body class="bg-gray-50 min-h-screen text-gray-900">
 
-  <div class="file-list" id="file-list"></div>
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold">我的资源库</h1>
+        <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览</p>
+      </div>
+      <div class="flex gap-2 items-center w-full sm:w-auto">
+        <input id="search" class="border rounded px-3 py-2 text-sm w-full sm:w-72" placeholder="搜索文件或文件夹（按名字）" />
+        <button id="refreshBtn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded text-sm">刷新</button>
+      </div>
+    </header>
 
-  <footer>
-    <p>✨ 仓库地址: <a href="https://github.com/tianshihao2003/resource" target="_blank">github.com/tianshihao2003/resource</a></p>
-  </footer>
+    <nav id="breadcrumbs" class="text-sm text-gray-600 mb-4"></nav>
 
-  <script>
-    // 这里会自动调用Cloudflare代理（无需改代码！）
-    async function loadFiles() {
-      try {
-        const response = await fetch('https://resource-proxy.tianshihao2003.workers.dev/'); // 关键：调用Cloudflare代理
-        const data = await response.json();
-        
-        const fileList = document.getElementById('file-list');
-        fileList.innerHTML = ''; // 清空旧内容
+    <main>
+      <div id="error" class="text-red-600 mb-3"></div>
 
-        data.forEach(file => {
-          if (file.type === 'file') {
-            const card = document.createElement('div');
-            card.className = 'file-card';
-            card.innerHTML = `
-              <h3>${file.name}</h3>
-              <p>大小: ${formatSize(file.size)}</p>
-              <a href="${file.download_url}" target="_blank">⬇️ 下载</a>
-            `;
-            fileList.appendChild(card);
-          }
-        });
+      <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <!-- 列表项注入这里 -->
+      </section>
 
-        if (data.length === 0) {
-          fileList.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #d9d9d9;">仓库为空哦～快上传点宝藏吧！</p>';
-        }
-      } catch (error) {
-        console.error('加载失败:', error);
-        document.getElementById('file-list').innerHTML = 
-          '<p style="grid-column: 1 / -1; text-align: center; color: #ff4d4f;">出错了！请检查仓库路径或联系我 😄</p>';
-      }
+      <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空或没有匹配的文件。</div>
+    </main>
+
+    <footer class="mt-6 text-sm text-gray-500">
+      提示：当前页面通过 GitHub 公共 API 读取数据。若仓库为私有或访问量大，建议用 Cloudflare Worker 或后端代理来安全转发短期令牌，避免在前端暴露长期凭证并防止 API 限制。
+    </footer>
+  </div>
+
+  <!-- 预览模态 -->
+  <div id="previewModal" class="fixed inset-0 flex items-center justify-center hidden">
+    <div class="absolute inset-0 modal-backdrop"></div>
+    <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
+      <div class="flex justify-between items-center mb-3">
+        <div class="font-medium" id="previewTitle">预览</div>
+        <div class="flex gap-2">
+          <a id="previewOpenNew" class="text-sm underline hidden" target="_blank" rel="noreferrer">在新窗口打开</a>
+          <button id="previewClose" class="text-sm px-3 py-1 border rounded">关闭</button>
+        </div>
+      </div>
+      <div id="previewContent"></div>
+    </div>
+  </div>
+
+<script>
+/*
+  Single-file Repo Drive
+  - OWNER / REPO 已设定为你的：tianshihao2003 / resource
+  - 仅适用于公开仓库（无需 token）。若仓库私有，请在后端/Worker 做代理并返回相同格式的数据。
+*/
+
+const OWNER = 'tianshihao2003';
+const REPO  = 'resource';
+
+const apiBase = (path='') => `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+
+const $ = (id) => document.getElementById(id);
+const listingEl = $('listing');
+const breadcrumbsEl = $('breadcrumbs');
+const errorEl = $('error');
+const emptyEl = $('empty');
+
+let currentPath = ''; // '' 表示根目录
+let currentItems = [];
+
+// helpers
+function niceSize(bytes){
+  if (bytes === 0) return '0B';
+  if (!bytes && bytes !== 0) return '-';
+  const u = ['B','KB','MB','GB'];
+  let i=0; let n=bytes;
+  while(n>=1024 && i<u.length-1){ n/=1024; i++; }
+  return Math.round(n*10)/10 + u[i];
+}
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function iconFor(item){
+  if (item.type === 'dir') return '📁';
+  const ext = (item.name.split('.').pop()||'').toLowerCase();
+  if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼️';
+  if (['mp4','mov','webm','mkv'].includes(ext)) return '🎞️';
+  if (['mp3','wav','ogg'].includes(ext)) return '🎵';
+  if (['pdf'].includes(ext)) return '📕';
+  if (['zip','tar','gz','rar'].includes(ext)) return '🗜️';
+  if (['md','txt','json','js','py','html','css','java','c','cpp'].includes(ext)) return '📄';
+  return '📦';
+}
+
+// fetch list for a path
+async function loadPath(path){
+  errorEl.textContent = '';
+  listingEl.innerHTML = '';
+  emptyEl.classList.add('hidden');
+
+  try{
+    const res = await fetch(apiBase(path), { headers: { Accept: 'application/vnd.github.v3+json' } });
+    if (res.status === 404) throw new Error('路径不存在或仓库不可访问（可能是私有仓库）。');
+    if (res.status === 403) throw new Error('访问被限制：可能触发 GitHub API 限制。建议使用代理或 token。');
+    if (!res.ok) throw new Error('GitHub API 错误：' + res.status);
+    const data = await res.json();
+    // data: array (目录) 或 object (单文件)
+    const arr = Array.isArray(data) ? data : [data];
+    // sort: directories first, then files by name
+    arr.sort((a,b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name);
+      return a.type === 'dir' ? -1 : 1;
+    });
+    currentItems = arr;
+    renderList();
+    renderBreadcrumbs();
+  }catch(e){
+    errorEl.textContent = e.message || '加载失败';
+    currentItems = [];
+    listingEl.innerHTML = '';
+  }
+}
+
+// render breadcrumbs
+function renderBreadcrumbs(){
+  const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
+  const crumbs = [{name:'root', path:''}].concat(parts.map((p,i)=>({name:p, path: parts.slice(0,i+1).join('/')})));
+  breadcrumbsEl.innerHTML = crumbs.map((c,i) => {
+    const sep = i < crumbs.length -1 ? ' / ' : '';
+    return `<button data-path="${escapeHtml(c.path)}" class="hover:underline mr-2">${escapeHtml(c.name)}</button>${sep}`;
+  }).join('');
+  // attach clicks
+  breadcrumbsEl.querySelectorAll('button[data-path]').forEach(btn => {
+    btn.onclick = () => { currentPath = btn.dataset.path; loadPath(currentPath); };
+  });
+}
+
+// render listing
+function renderList(){
+  listingEl.innerHTML = '';
+  if (!currentItems || currentItems.length === 0){
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  for (const item of currentItems){
+    const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
+    const card = document.createElement('div');
+    card.className = 'p-3 border rounded flex items-start gap-3 hover:shadow-sm bg-white';
+    const ic = document.createElement('div');
+    ic.className = 'text-3xl';
+    ic.textContent = iconFor(item);
+
+    const right = document.createElement('div');
+    right.className = 'flex-1';
+    const topRow = document.createElement('div');
+    topRow.className = 'flex justify-between items-start gap-3';
+    const nameBtn = document.createElement('button');
+    nameBtn.className = 'text-left font-medium truncate text-sm';
+    nameBtn.style.padding = '0';
+    nameBtn.textContent = item.name;
+    nameBtn.onclick = () => openItem(item);
+
+    const meta = document.createElement('div');
+    meta.className = 'text-xs text-gray-500';
+    meta.textContent = sizeText;
+
+    topRow.appendChild(nameBtn);
+    topRow.appendChild(meta);
+
+    const pathLine = document.createElement('div');
+    pathLine.className = 'text-xs text-gray-500 mt-1 truncate';
+    pathLine.textContent = item.path || item.sha || '';
+
+    const actions = document.createElement('div');
+    actions.className = 'mt-2 flex gap-3';
+    if (item.download_url){
+      const a = document.createElement('a');
+      a.href = item.download_url;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      a.className = 'text-xs underline';
+      a.textContent = '下载';
+      actions.appendChild(a);
+    }
+    if (item.html_url){
+      const b = document.createElement('a');
+      b.href = item.html_url;
+      b.target = '_blank';
+      b.rel = 'noreferrer';
+      b.className = 'text-xs underline';
+      b.textContent = '在 GitHub 查看';
+      actions.appendChild(b);
+    }
+    if (item.type !== 'dir' && item.download_url){
+      const view = document.createElement('button');
+      view.className = 'text-xs px-2 py-1 border rounded';
+      view.textContent = '预览';
+      view.onclick = () => openItem(item);
+      actions.appendChild(view);
     }
 
-    // 格式化文件大小（KB/MB）
-    function formatSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / 1048576).toFixed(1) + ' MB';
-    }
+    right.appendChild(topRow);
+    right.appendChild(pathLine);
+    right.appendChild(actions);
 
-    // 页面加载时自动执行
-    window.onload = loadFiles;
-  </script>
+    card.appendChild(ic);
+    card.appendChild(right);
+    listingEl.appendChild(card);
+  }
+}
+
+// open item: navigate if dir; preview if previewable; open raw otherwise
+async function openItem(item){
+  if (item.type === 'dir'){
+    currentPath = item.path.replace(new RegExp(`^${OWNER}/${REPO}/?`), '').replace(/^\/+|\/+$/g,'');
+    await loadPath(currentPath);
+    return;
+  }
+
+  // image preview
+  if (item.download_url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name)){
+    showPreview({ type:'image', src: item.download_url, name: item.name });
+    return;
+  }
+
+  // text preview
+  if (item.download_url && /\.(md|txt|json|js|jsx|ts|tsx|py|html|css|java|c|cpp)$/i.test(item.name)){
+    try{
+      showLoadingPreview('加载中...');
+      const r = await fetch(item.download_url);
+      const text = await r.text();
+      showPreview({ type:'text', content: text, name: item.name });
+    }catch(e){
+      showPreview({ type:'text', content: '无法加载文件：' + (e.message||e), name: item.name });
+    }
+    return;
+  }
+
+  // otherwise open raw url
+  if (item.download_url) window.open(item.download_url, '_blank');
+}
+
+// preview modal handling
+const previewModal = $('previewModal');
+const previewContent = $('previewContent');
+const previewTitle = $('previewTitle');
+const previewOpenNew = $('previewOpenNew');
+$('previewClose').onclick = () => hidePreview();
+
+function showLoadingPreview(msg='加载中...'){
+  previewTitle.textContent = '预览';
+  previewContent.innerHTML = `<div class="text-center py-10 text-gray-600">${escapeHtml(msg)}</div>`;
+  previewOpenNew.classList.add('hidden');
+  previewModal.classList.remove('hidden');
+}
+function showPreview({type, src, content, name}){
+  previewTitle.textContent = name || '预览';
+  previewContent.innerHTML = '';
+  previewOpenNew.classList.add('hidden');
+
+  if (type === 'image'){
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = name || '';
+    img.className = 'max-h-[70vh] mx-auto';
+    previewContent.appendChild(img);
+    previewOpenNew.href = src;
+    previewOpenNew.classList.remove('hidden');
+  } else if (type === 'text'){
+    const pre = document.createElement('pre');
+    pre.className = 'whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto';
+    pre.textContent = content || '';
+    previewContent.appendChild(pre);
+  } else {
+    previewContent.textContent = '不支持的预览类型';
+  }
+  previewModal.classList.remove('hidden');
+}
+function hidePreview(){
+  previewModal.classList.add('hidden');
+  previewContent.innerHTML = '';
+}
+
+// search & refresh handlers
+$('refreshBtn').onclick = () => loadPath(currentPath);
+$('search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!currentItems || currentItems.length === 0) return renderList();
+  const filtered = currentItems.filter(i => i.name.toLowerCase().includes(q));
+  // temporarily render filtered
+  listingEl.innerHTML = '';
+  if (filtered.length === 0){ emptyEl.classList.remove('hidden'); } else { emptyEl.classList.add('hidden'); }
+  for (const item of filtered){
+    const clone = Object.assign({}, item);
+    // build card similarly (quick reuse by calling small function)
+    const sizeText = clone.type === 'dir' ? '文件夹' : ( clone.size !== undefined ? niceSize(clone.size) : '-' );
+    const card = document.createElement('div');
+    card.className = 'p-3 border rounded flex items-start gap-3 hover:shadow-sm bg-white';
+    const ic = document.createElement('div'); ic.className = 'text-3xl'; ic.textContent = iconFor(clone);
+    const right = document.createElement('div'); right.className = 'flex-1';
+    const topRow = document.createElement('div'); topRow.className = 'flex justify-between items-start gap-3';
+    const nameBtn = document.createElement('button'); nameBtn.className = 'text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
+    nameBtn.textContent = clone.name; nameBtn.onclick = () => openItem(clone);
+    const meta = document.createElement('div'); meta.className='text-xs text-gray-500'; meta.textContent=sizeText;
+    topRow.appendChild(nameBtn); topRow.appendChild(meta);
+    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent=clone.path||'';
+    const actions = document.createElement('div'); actions.className='mt-2 flex gap-3';
+    if (clone.download_url){ const a = document.createElement('a'); a.href=clone.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
+    if (clone.html_url){ const b = document.createElement('a'); b.href=clone.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
+    if (clone.type !== 'dir' && clone.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = () => openItem(clone); actions.appendChild(view); }
+    right.appendChild(topRow); right.appendChild(pathLine); right.appendChild(actions);
+    card.appendChild(ic); card.appendChild(right);
+    listingEl.appendChild(card);
+  }
+});
+
+// initial load
+loadPath('');
+
+// keyboard: Esc to close preview
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hidePreview();
+});
+</script>
 </body>
 </html>
-
