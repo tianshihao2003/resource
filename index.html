@@ -31,7 +31,7 @@
     // 这里会自动调用Cloudflare代理（无需改代码！）
     async function loadFiles() {
       try {
-        const response = await fetch('/api?path='); // 关键：调用Cloudflare代理
+        const response = await fetch('https://resource-proxy.tianshihao2003.workers.dev/'); // 关键：调用Cloudflare代理
         const data = await response.json();
         
         const fileList = document.getElementById('file-list');
@@ -72,3 +72,4 @@
   </script>
 </body>
 </html>
+
