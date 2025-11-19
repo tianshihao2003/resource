@@ -5,72 +5,177 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>我的资源库 · tianshihao2003/resource</title>
 
-  <!-- Tailwind CDN (快速样式) -->
+  <!-- Tailwind 快速样式 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .modal-backdrop { background: rgba(0,0,0,0.55); }
+    .modal-backdrop { background: rgba(0,0,0,0.65); }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp:2; -webkit-box-orient: vertical; overflow: hidden; }
     .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
+    /* 密码弹窗样式 */
+    #pwGate { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; }
+    #pwBox { width:90%; max-width:420px; background:white; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.25); padding:20px; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-900">
-  <div class="max-w-6xl mx-auto p-6">
-    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-      <div class="flex items-center gap-4">
-        <!-- sample image uses the uploaded local path (will be transformed where needed) -->
-        <img id="siteLogo" src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
+  <!-- 密码门 -->
+  <div id="pwGate" class="hidden">
+    <div class="absolute inset-0 modal-backdrop"></div>
+    <div id="pwBox" class="relative z-10">
+      <div class="flex items-center gap-3 mb-4">
+        <!-- 使用你上传的本地图片路径作为 logo URL（已写死） -->
+        <img src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
         <div>
-          <h1 class="text-2xl font-semibold">我的资源库</h1>
-          <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览（静态前端版）</p>
+          <h2 class="text-lg font-semibold">请输入访问密码</h2>
+          <p class="text-sm text-gray-500">输入正确密码后才能查看资源。</p>
         </div>
       </div>
 
-      <div class="flex gap-2 items-center w-full sm:w-auto">
-        <input id="search" class="border rounded px-3 py-2 text-sm w-full sm:w-72" placeholder="搜索文件或文件夹（按名字）" />
-        <button id="refreshBtn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded text-sm">刷新</button>
+      <div class="mb-3">
+        <input id="passwordInput" type="password" placeholder="输入密码" class="w-full border rounded px-3 py-2" />
       </div>
-    </header>
 
-    <nav id="breadcrumbs" class="text-sm text-gray-600 mb-4"></nav>
+      <div class="flex items-center justify-between gap-3">
+        <label class="text-sm text-gray-600 flex items-center gap-2"><input id="remember" type="checkbox" /> 记住我（本地保存）</label>
+        <div class="flex gap-2">
+          <button id="pwCancel" class="px-3 py-2 border rounded text-sm">取消</button>
+          <button id="pwSubmit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm">进入</button>
+        </div>
+      </div>
 
-    <main>
-      <div id="error" class="text-red-600 mb-3"></div>
-
-      <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></section>
-      <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空或没有匹配的文件。</div>
-    </main>
-
-    <footer class="mt-6 text-sm text-gray-500">
-      提示：此静态页面直接调用 GitHub 公共 API 获取目录（无后端 token）。若仓库为私有或访问量大，请改用代理/Worker 方式以避免速率限制和暴露凭证。
-    </footer>
+      <p id="pwError" class="text-sm text-red-600 mt-3 hidden"></p>
+    </div>
   </div>
 
-  <!-- Preview modal -->
-  <div id="previewModal" class="fixed inset-0 flex items-center justify-center hidden">
-    <div class="absolute inset-0 modal-backdrop"></div>
-    <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
-      <div class="flex justify-between items-center mb-3">
-        <div class="font-medium" id="previewTitle">预览</div>
-        <div class="flex gap-2">
-          <a id="previewOpenNew" class="text-sm underline hidden" target="_blank" rel="noreferrer">在新窗口打开</a>
-          <button id="previewClose" class="text-sm px-3 py-1 border rounded">关闭</button>
+  <!-- 主站内容（在通过密码后显示） -->
+  <div id="site" class="hidden">
+    <div class="max-w-6xl mx-auto p-6">
+      <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div class="flex items-center gap-4">
+          <img id="siteLogo" src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
+          <div>
+            <h1 class="text-2xl font-semibold">我的资源库</h1>
+            <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览（静态前端版）</p>
+          </div>
         </div>
+
+        <div class="flex gap-2 items-center w-full sm:w-auto">
+          <input id="search" class="border rounded px-3 py-2 text-sm w-full sm:w-72" placeholder="搜索文件或文件夹（按名字）" />
+          <button id="refreshBtn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded text-sm">刷新</button>
+        </div>
+      </header>
+
+      <nav id="breadcrumbs" class="text-sm text-gray-600 mb-4"></nav>
+
+      <main>
+        <div id="error" class="text-red-600 mb-3"></div>
+
+        <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></section>
+        <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空或没有匹配的文件。</div>
+      </main>
+
+      <footer class="mt-6 text-sm text-gray-500">
+        提示：此静态页面直接调用 GitHub 公共 API 获取目录（无后端 token）。若仓库为私有或访问量大，请改用代理/Worker 方式以避免速率限制和暴露凭证。
+      </footer>
+    </div>
+
+    <!-- Preview modal -->
+    <div id="previewModal" class="fixed inset-0 flex items-center justify-center hidden">
+      <div class="absolute inset-0 modal-backdrop"></div>
+      <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
+        <div class="flex justify-between items-center mb-3">
+          <div class="font-medium" id="previewTitle">预览</div>
+          <div class="flex gap-2">
+            <a id="previewOpenNew" class="text-sm underline hidden" target="_blank" rel="noreferrer">在新窗口打开</a>
+            <button id="previewClose" class="text-sm px-3 py-1 border rounded">关闭</button>
+          </div>
+        </div>
+        <div id="previewContent"></div>
       </div>
-      <div id="previewContent"></div>
     </div>
   </div>
 
 <script>
 /*
-  Simple static frontend to browse a GitHub repo.
-  - OWNER and REPO are set to your values.
-  - Works for public repositories (uses GitHub public API).
-  - If you hit rate limits, see earlier suggestions (Cloudflare Worker or build-time index).
+  简单密码门（客户端实现）
+  - 修改 PASSWORD 常量为你想要的密码（明文存在于页面中 —— 可见但足够防止一般访问）。
+  - 若需要更安全的方案，请使用 Cloudflare Worker + Secret。
 */
+const PASSWORD = 'secret123'; // <- 把这里替换为你想要的密码
+const STORAGE_KEY = 'repo_unlocked_v1'; // localStorage / sessionStorage key
+
+// 如果记住选中则保存到 localStorage，否则 sessionStorage
+function setUnlocked(remember) {
+  try {
+    if (remember) localStorage.setItem(STORAGE_KEY, '1');
+    else sessionStorage.setItem(STORAGE_KEY, '1');
+  } catch(e){}
+}
+function isUnlocked() {
+  try {
+    if (localStorage.getItem(STORAGE_KEY) === '1') return true;
+    if (sessionStorage.getItem(STORAGE_KEY) === '1') return true;
+  } catch(e){}
+  return false;
+}
+function clearUnlocked() {
+  try { localStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem(STORAGE_KEY); } catch(e){}
+}
+
+// 密码门 DOM
+const pwGate = document.getElementById('pwGate');
+const passwordInput = document.getElementById('passwordInput');
+const pwSubmit = document.getElementById('pwSubmit');
+const pwCancel = document.getElementById('pwCancel');
+const pwError = document.getElementById('pwError');
+const rememberCb = document.getElementById('remember');
+const site = document.getElementById('site');
+
+function showGate() {
+  pwError.classList.add('hidden');
+  passwordInput.value = '';
+  pwGate.classList.remove('hidden');
+  site.classList.add('hidden');
+  passwordInput.focus();
+}
+function hideGate() {
+  pwGate.classList.add('hidden');
+  site.classList.remove('hidden');
+}
+
+// 校验密码
+function tryPassword(remember) {
+  const v = (passwordInput.value || '').trim();
+  if (!v) { pwError.textContent = '请输入密码'; pwError.classList.remove('hidden'); return; }
+  if (v === PASSWORD) {
+    setUnlocked(remember);
+    hideGate();
+    initApp(); // 初始化主站 JS（只有通过密码后才运行）
+  } else {
+    pwError.textContent = '密码错误，请重试';
+    pwError.classList.remove('hidden');
+  }
+}
+
+// 取消（跳回空白或停留在门）——这里我们隐藏站点（保持门）
+pwCancel.onclick = () => { passwordInput.value = ''; pwError.classList.add('hidden'); };
+
+// Enter/按钮事件
+pwSubmit.onclick = () => tryPassword(rememberCb.checked);
+passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPassword(rememberCb.checked); });
+
+// 页面加载时检查是否已解锁
+if (isUnlocked()) {
+  // 直接显示站点并初始化
+  site.classList.remove('hidden');
+  initApp();
+} else {
+  showGate();
+}
+
+/* ===================== 主站 JS（和之前静态页面逻辑相同） ===================== */
 
 const OWNER = 'tianshihao2003';
 const REPO  = 'resource';
-
 const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
 
 const $ = id => document.getElementById(id);
@@ -79,6 +184,7 @@ const listingEl = $('listing'), breadcrumbsEl = $('breadcrumbs'), errorEl = $('e
 let currentPath = '';
 let currentItems = [];
 
+// 工具函数
 function niceSize(bytes){
   if (bytes === 0) return '0B';
   if (!bytes && bytes !== 0) return '-';
@@ -158,13 +264,12 @@ function renderList(){
 
 async function openItem(item){
   if (item.type === 'dir'){
-    // api returns item.path like "folder" or "owner/repo/folder" for some cases; normalize
     currentPath = item.path ? item.path.replace(new RegExp(`^${OWNER}/${REPO}/?`), '').replace(/^\/+|\/+$/g,'') : item.name;
     await loadPath(currentPath);
     return;
   }
 
-  // image preview (use download_url)
+  // image preview
   if (item.download_url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name)){
     showPreview({ type:'image', src: item.download_url, name: item.name });
     return;
@@ -183,7 +288,6 @@ async function openItem(item){
     return;
   }
 
-  // fallback: open raw download
   if (item.download_url) window.open(item.download_url, '_blank');
 }
 
@@ -210,7 +314,6 @@ $('search').addEventListener('input', (e)=> {
   listingEl.innerHTML = '';
   if (filtered.length === 0) emptyEl.classList.remove('hidden'); else emptyEl.classList.add('hidden');
   for (const item of filtered){
-    // reuse small render (same as above)
     const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
     const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
     const ic = document.createElement('div'); ic.className='text-3xl'; ic.textContent = iconFor(item);
@@ -230,11 +333,14 @@ $('search').addEventListener('input', (e)=> {
   }
 });
 
-// initial load
-loadPath('');
+// 初始化应用（在通过密码后调用）
+function initApp(){
+  // show site (in case it was hidden)
+  site.classList.remove('hidden');
+  // load root
+  loadPath('');
+}
 
-// Esc closes preview
-document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') hidePreview(); });
 </script>
 </body>
 </html>
