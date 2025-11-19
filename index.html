@@ -11,18 +11,16 @@
     .modal-backdrop { background: rgba(0,0,0,0.65); }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp:2; -webkit-box-orient: vertical; overflow: hidden; }
     .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
-    /* 密码弹窗样式 */
-    #pwGate { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; }
     #pwBox { width:90%; max-width:420px; background:white; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.25); padding:20px; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-900">
-  <!-- 密码门 -->
-  <div id="pwGate" class="hidden">
+  <!-- 密码门（用 style.display 控制显示/隐藏） -->
+  <div id="pwGate" style="display:flex; align-items:center; justify-content:center; position:fixed; inset:0; z-index:9999;">
     <div class="absolute inset-0 modal-backdrop"></div>
     <div id="pwBox" class="relative z-10">
       <div class="flex items-center gap-3 mb-4">
-        <!-- 使用你上传的本地图片路径作为 logo URL（已写死） -->
+        <!-- 使用你上传的本地图片路径作为 logo URL -->
         <img src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
         <div>
           <h2 class="text-lg font-semibold">请输入访问密码</h2>
@@ -42,12 +40,12 @@
         </div>
       </div>
 
-      <p id="pwError" class="text-sm text-red-600 mt-3 hidden"></p>
+      <p id="pwError" class="text-sm text-red-600 mt-3" style="display:none"></p>
     </div>
   </div>
 
   <!-- 主站内容（在通过密码后显示） -->
-  <div id="site" class="hidden">
+  <div id="site" style="display:none">
     <div class="max-w-6xl mx-auto p-6">
       <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div class="flex items-center gap-4">
@@ -70,7 +68,7 @@
         <div id="error" class="text-red-600 mb-3"></div>
 
         <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></section>
-        <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空或没有匹配的文件。</div>
+        <div id="empty" class="text-center text-gray-500 py-10" style="display:none">此目录为空或没有匹配的文件。</div>
       </main>
 
       <footer class="mt-6 text-sm text-gray-500">
@@ -79,13 +77,13 @@
     </div>
 
     <!-- Preview modal -->
-    <div id="previewModal" class="fixed inset-0 flex items-center justify-center hidden">
+    <div id="previewModal" class="fixed inset-0 flex items-center justify-center" style="display:none">
       <div class="absolute inset-0 modal-backdrop"></div>
       <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
         <div class="flex justify-between items-center mb-3">
           <div class="font-medium" id="previewTitle">预览</div>
           <div class="flex gap-2">
-            <a id="previewOpenNew" class="text-sm underline hidden" target="_blank" rel="noreferrer">在新窗口打开</a>
+            <a id="previewOpenNew" class="text-sm underline" target="_blank" rel="noreferrer" style="display:none">在新窗口打开</a>
             <button id="previewClose" class="text-sm px-3 py-1 border rounded">关闭</button>
           </div>
         </div>
@@ -96,14 +94,14 @@
 
 <script>
 /*
-  简单密码门（客户端实现）
-  - 修改 PASSWORD 常量为你想要的密码（明文存在于页面中 —— 可见但足够防止一般访问）。
-  - 若需要更安全的方案，请使用 Cloudflare Worker + Secret。
+  修复了 modal 不消失的问题（使用 style.display）。
+  客户端密码：0824
+  注意：客户端密码只能做简单访问门；若需要真正安全，请用 Worker/后端鉴权。
 */
-const PASSWORD = 'secret123'; // <- 把这里替换为你想要的密码
-const STORAGE_KEY = 'repo_unlocked_v1'; // localStorage / sessionStorage key
+const PASSWORD = '0824'; // <- 已替换为你要的密码
+const STORAGE_KEY = 'repo_unlocked_v1';
 
-// 如果记住选中则保存到 localStorage，否则 sessionStorage
+// 存储 / 检查解锁状态
 function setUnlocked(remember) {
   try {
     if (remember) localStorage.setItem(STORAGE_KEY, '1');
@@ -121,7 +119,7 @@ function clearUnlocked() {
   try { localStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem(STORAGE_KEY); } catch(e){}
 }
 
-// 密码门 DOM
+// DOM 元素（一次性获取）
 const pwGate = document.getElementById('pwGate');
 const passwordInput = document.getElementById('passwordInput');
 const pwSubmit = document.getElementById('pwSubmit');
@@ -131,42 +129,42 @@ const rememberCb = document.getElementById('remember');
 const site = document.getElementById('site');
 
 function showGate() {
-  pwError.classList.add('hidden');
+  pwError.style.display = 'none';
   passwordInput.value = '';
-  pwGate.classList.remove('hidden');
-  site.classList.add('hidden');
-  passwordInput.focus();
+  pwGate.style.display = 'flex';
+  site.style.display = 'none';
+  setTimeout(()=>passwordInput.focus(), 50);
 }
 function hideGate() {
-  pwGate.classList.add('hidden');
-  site.classList.remove('hidden');
+  pwGate.style.display = 'none';
+  site.style.display = 'block';
+  pwError.style.display = 'none';
 }
 
 // 校验密码
 function tryPassword(remember) {
   const v = (passwordInput.value || '').trim();
-  if (!v) { pwError.textContent = '请输入密码'; pwError.classList.remove('hidden'); return; }
+  if (!v) { pwError.textContent = '请输入密码'; pwError.style.display = 'block'; return; }
   if (v === PASSWORD) {
     setUnlocked(remember);
     hideGate();
-    initApp(); // 初始化主站 JS（只有通过密码后才运行）
+    // 初始化应用（通过密码后才加载）
+    initApp();
   } else {
     pwError.textContent = '密码错误，请重试';
-    pwError.classList.remove('hidden');
+    pwError.style.display = 'block';
   }
 }
 
-// 取消（跳回空白或停留在门）——这里我们隐藏站点（保持门）
-pwCancel.onclick = () => { passwordInput.value = ''; pwError.classList.add('hidden'); };
-
-// Enter/按钮事件
+// 事件绑定
+pwCancel.onclick = () => { passwordInput.value = ''; pwError.style.display = 'none'; };
 pwSubmit.onclick = () => tryPassword(rememberCb.checked);
 passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPassword(rememberCb.checked); });
 
-// 页面加载时检查是否已解锁
+// 若已解锁，直接显示并初始化；否则显示门
 if (isUnlocked()) {
-  // 直接显示站点并初始化
-  site.classList.remove('hidden');
+  site.style.display = 'block';
+  pwGate.style.display = 'none';
   initApp();
 } else {
   showGate();
@@ -184,7 +182,6 @@ const listingEl = $('listing'), breadcrumbsEl = $('breadcrumbs'), errorEl = $('e
 let currentPath = '';
 let currentItems = [];
 
-// 工具函数
 function niceSize(bytes){
   if (bytes === 0) return '0B';
   if (!bytes && bytes !== 0) return '-';
@@ -208,7 +205,7 @@ function iconFor(item){
 async function loadPath(path){
   errorEl.textContent = '';
   listingEl.innerHTML = '';
-  emptyEl.classList.add('hidden');
+  emptyEl.style.display = 'none';
 
   const url = API_BASE + encodeURIComponent(path).replace(/%2F/g,'/');
   try{
@@ -238,8 +235,8 @@ function renderBreadcrumbs(){
 
 function renderList(){
   listingEl.innerHTML = '';
-  if (!currentItems || currentItems.length === 0){ emptyEl.classList.remove('hidden'); return; }
-  emptyEl.classList.add('hidden');
+  if (!currentItems || currentItems.length === 0){ emptyEl.style.display = 'block'; return; }
+  emptyEl.style.display = 'none';
 
   for (const item of currentItems){
     const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
@@ -295,15 +292,15 @@ async function openItem(item){
 const previewModal = $('previewModal'), previewContent = $('previewContent'), previewTitle = $('previewTitle'), previewOpenNew = $('previewOpenNew');
 $('previewClose').onclick = ()=> hidePreview();
 
-function showLoadingPreview(msg='加载中...'){ previewTitle.textContent='预览'; previewContent.innerHTML=`<div class="text-center py-10 text-gray-600">${msg}</div>`; previewOpenNew.classList.add('hidden'); previewModal.classList.remove('hidden'); }
+function showLoadingPreview(msg='加载中...'){ previewTitle.textContent='预览'; previewContent.innerHTML=`<div class="text-center py-10 text-gray-600">${msg}</div>`; previewOpenNew.style.display='none'; previewModal.style.display='flex'; }
 function showPreview({type, src, content, name}){
-  previewTitle.textContent = name || '预览'; previewContent.innerHTML=''; previewOpenNew.classList.add('hidden');
-  if (type === 'image'){ const img=document.createElement('img'); img.src=src; img.alt=name||''; img.className='max-h-[70vh] mx-auto'; previewContent.appendChild(img); previewOpenNew.href=src; previewOpenNew.classList.remove('hidden'); }
+  previewTitle.textContent = name || '预览'; previewContent.innerHTML=''; previewOpenNew.style.display='none';
+  if (type === 'image'){ const img=document.createElement('img'); img.src=src; img.alt=name||''; img.className='max-h-[70vh] mx-auto'; previewContent.appendChild(img); previewOpenNew.href=src; previewOpenNew.style.display='inline'; }
   else if (type === 'text'){ const pre=document.createElement('pre'); pre.className='whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto'; pre.textContent=content||''; previewContent.appendChild(pre); }
   else previewContent.textContent='不支持的预览类型';
-  previewModal.classList.remove('hidden');
+  previewModal.style.display='flex';
 }
-function hidePreview(){ previewModal.classList.add('hidden'); previewContent.innerHTML=''; }
+function hidePreview(){ previewModal.style.display='none'; previewContent.innerHTML=''; }
 
 // search & refresh
 $('refreshBtn').onclick = ()=> loadPath(currentPath);
@@ -312,7 +309,7 @@ $('search').addEventListener('input', (e)=> {
   if (!currentItems || currentItems.length===0) return renderList();
   const filtered = currentItems.filter(i => i.name.toLowerCase().includes(q));
   listingEl.innerHTML = '';
-  if (filtered.length === 0) emptyEl.classList.remove('hidden'); else emptyEl.classList.add('hidden');
+  if (filtered.length === 0) emptyEl.style.display = 'block'; else emptyEl.style.display = 'none';
   for (const item of filtered){
     const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
     const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
@@ -335,9 +332,8 @@ $('search').addEventListener('input', (e)=> {
 
 // 初始化应用（在通过密码后调用）
 function initApp(){
-  // show site (in case it was hidden)
-  site.classList.remove('hidden');
-  // load root
+  // 显示站点（在 hideGate 中已设置，但为了确保也在这里设置）
+  site.style.display = 'block';
   loadPath('');
 }
 
