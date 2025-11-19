@@ -3,25 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>资源库 · tianshihao2003/resource</title>
+  <title>我的资源库 · tianshihao2003/resource</title>
 
-  <!-- Tailwind CDN (用于快速样式) -->
+  <!-- Tailwind CDN (快速样式) -->
   <script src="https://cdn.tailwindcss.com"></script>
-
   <style>
-    /* 简单的模态和滚动样式微调 */
     .modal-backdrop { background: rgba(0,0,0,0.55); }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp:2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-900">
-
   <div class="max-w-6xl mx-auto p-6">
     <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-      <div>
-        <h1 class="text-2xl font-semibold">我的资源库</h1>
-        <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览</p>
+      <div class="flex items-center gap-4">
+        <!-- sample image uses the uploaded local path (will be transformed where needed) -->
+        <img id="siteLogo" src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
+        <div>
+          <h1 class="text-2xl font-semibold">我的资源库</h1>
+          <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览（静态前端版）</p>
+        </div>
       </div>
+
       <div class="flex gap-2 items-center w-full sm:w-auto">
         <input id="search" class="border rounded px-3 py-2 text-sm w-full sm:w-72" placeholder="搜索文件或文件夹（按名字）" />
         <button id="refreshBtn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded text-sm">刷新</button>
@@ -33,19 +36,16 @@
     <main>
       <div id="error" class="text-red-600 mb-3"></div>
 
-      <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        <!-- 列表项注入这里 -->
-      </section>
-
+      <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></section>
       <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空或没有匹配的文件。</div>
     </main>
 
     <footer class="mt-6 text-sm text-gray-500">
-      提示：当前页面通过 GitHub 公共 API 读取数据。若仓库为私有或访问量大，建议用 Cloudflare Worker 或后端代理来安全转发短期令牌，避免在前端暴露长期凭证并防止 API 限制。
+      提示：此静态页面直接调用 GitHub 公共 API 获取目录（无后端 token）。若仓库为私有或访问量大，请改用代理/Worker 方式以避免速率限制和暴露凭证。
     </footer>
   </div>
 
-  <!-- 预览模态 -->
+  <!-- Preview modal -->
   <div id="previewModal" class="fixed inset-0 flex items-center justify-center hidden">
     <div class="absolute inset-0 modal-backdrop"></div>
     <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
@@ -62,35 +62,31 @@
 
 <script>
 /*
-  Single-file Repo Drive
-  - OWNER / REPO 已设定为你的：tianshihao2003 / resource
-  - 仅适用于公开仓库（无需 token）。若仓库私有，请在后端/Worker 做代理并返回相同格式的数据。
+  Simple static frontend to browse a GitHub repo.
+  - OWNER and REPO are set to your values.
+  - Works for public repositories (uses GitHub public API).
+  - If you hit rate limits, see earlier suggestions (Cloudflare Worker or build-time index).
 */
 
 const OWNER = 'tianshihao2003';
 const REPO  = 'resource';
 
-const apiBase = (path='') => `https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`;
+const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
 
-const $ = (id) => document.getElementById(id);
-const listingEl = $('listing');
-const breadcrumbsEl = $('breadcrumbs');
-const errorEl = $('error');
-const emptyEl = $('empty');
+const $ = id => document.getElementById(id);
+const listingEl = $('listing'), breadcrumbsEl = $('breadcrumbs'), errorEl = $('error'), emptyEl = $('empty');
 
-let currentPath = ''; // '' 表示根目录
+let currentPath = '';
 let currentItems = [];
 
-// helpers
 function niceSize(bytes){
   if (bytes === 0) return '0B';
   if (!bytes && bytes !== 0) return '-';
   const u = ['B','KB','MB','GB'];
-  let i=0; let n=bytes;
+  let i=0, n=bytes;
   while(n>=1024 && i<u.length-1){ n/=1024; i++; }
   return Math.round(n*10)/10 + u[i];
 }
-function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function iconFor(item){
   if (item.type === 'dir') return '📁';
   const ext = (item.name.split('.').pop()||'').toLowerCase();
@@ -103,134 +99,72 @@ function iconFor(item){
   return '📦';
 }
 
-// fetch list for a path
 async function loadPath(path){
   errorEl.textContent = '';
   listingEl.innerHTML = '';
   emptyEl.classList.add('hidden');
 
+  const url = API_BASE + encodeURIComponent(path).replace(/%2F/g,'/');
   try{
-    const res = await fetch(apiBase(path), { headers: { Accept: 'application/vnd.github.v3+json' } });
+    const res = await fetch(url, { headers: { Accept: 'application/vnd.github.v3+json' } });
     if (res.status === 404) throw new Error('路径不存在或仓库不可访问（可能是私有仓库）。');
-    if (res.status === 403) throw new Error('访问被限制：可能触发 GitHub API 限制。建议使用代理或 token。');
+    if (res.status === 403) throw new Error('访问被限制：可能触发 GitHub API 限制。');
     if (!res.ok) throw new Error('GitHub API 错误：' + res.status);
     const data = await res.json();
-    // data: array (目录) 或 object (单文件)
     const arr = Array.isArray(data) ? data : [data];
-    // sort: directories first, then files by name
-    arr.sort((a,b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name);
-      return a.type === 'dir' ? -1 : 1;
-    });
+    arr.sort((a,b)=> a.type===b.type ? a.name.localeCompare(b.name) : a.type==='dir' ? -1:1);
     currentItems = arr;
     renderList();
     renderBreadcrumbs();
-  }catch(e){
+  } catch(e) {
     errorEl.textContent = e.message || '加载失败';
     currentItems = [];
     listingEl.innerHTML = '';
   }
 }
 
-// render breadcrumbs
 function renderBreadcrumbs(){
   const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
   const crumbs = [{name:'root', path:''}].concat(parts.map((p,i)=>({name:p, path: parts.slice(0,i+1).join('/')})));
-  breadcrumbsEl.innerHTML = crumbs.map((c,i) => {
-    const sep = i < crumbs.length -1 ? ' / ' : '';
-    return `<button data-path="${escapeHtml(c.path)}" class="hover:underline mr-2">${escapeHtml(c.name)}</button>${sep}`;
-  }).join('');
-  // attach clicks
-  breadcrumbsEl.querySelectorAll('button[data-path]').forEach(btn => {
-    btn.onclick = () => { currentPath = btn.dataset.path; loadPath(currentPath); };
-  });
+  breadcrumbsEl.innerHTML = crumbs.map((c,i)=>`<button data-path="${c.path}" class="hover:underline mr-2">${c.name}${i<crumbs.length-1?' /':''}</button>`).join('');
+  breadcrumbsEl.querySelectorAll('button[data-path]').forEach(btn=>btn.onclick=()=>{ currentPath = btn.dataset.path; loadPath(currentPath); });
 }
 
-// render listing
 function renderList(){
   listingEl.innerHTML = '';
-  if (!currentItems || currentItems.length === 0){
-    emptyEl.classList.remove('hidden');
-    return;
-  }
+  if (!currentItems || currentItems.length === 0){ emptyEl.classList.remove('hidden'); return; }
   emptyEl.classList.add('hidden');
 
   for (const item of currentItems){
     const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
-    const card = document.createElement('div');
-    card.className = 'p-3 border rounded flex items-start gap-3 hover:shadow-sm bg-white';
-    const ic = document.createElement('div');
-    ic.className = 'text-3xl';
-    ic.textContent = iconFor(item);
+    const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
+    const ic = document.createElement('div'); ic.className='text-3xl'; ic.textContent = iconFor(item);
+    const right = document.createElement('div'); right.className='flex-1';
+    const topRow = document.createElement('div'); topRow.className='flex justify-between items-start gap-3';
+    const nameBtn = document.createElement('button'); nameBtn.className='text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
+    nameBtn.textContent = item.name; nameBtn.onclick = ()=> openItem(item);
+    const meta = document.createElement('div'); meta.className='text-xs text-gray-500'; meta.textContent=sizeText;
+    topRow.appendChild(nameBtn); topRow.appendChild(meta);
+    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent = item.path || '';
+    const actions = document.createElement('div'); actions.className='mt-2 flex gap-3';
+    if (item.download_url){ const a=document.createElement('a'); a.href = item.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
+    if (item.html_url){ const b=document.createElement('a'); b.href=item.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
+    if (item.type !== 'dir' && item.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = ()=> openItem(item); actions.appendChild(view); }
 
-    const right = document.createElement('div');
-    right.className = 'flex-1';
-    const topRow = document.createElement('div');
-    topRow.className = 'flex justify-between items-start gap-3';
-    const nameBtn = document.createElement('button');
-    nameBtn.className = 'text-left font-medium truncate text-sm';
-    nameBtn.style.padding = '0';
-    nameBtn.textContent = item.name;
-    nameBtn.onclick = () => openItem(item);
-
-    const meta = document.createElement('div');
-    meta.className = 'text-xs text-gray-500';
-    meta.textContent = sizeText;
-
-    topRow.appendChild(nameBtn);
-    topRow.appendChild(meta);
-
-    const pathLine = document.createElement('div');
-    pathLine.className = 'text-xs text-gray-500 mt-1 truncate';
-    pathLine.textContent = item.path || item.sha || '';
-
-    const actions = document.createElement('div');
-    actions.className = 'mt-2 flex gap-3';
-    if (item.download_url){
-      const a = document.createElement('a');
-      a.href = item.download_url;
-      a.target = '_blank';
-      a.rel = 'noreferrer';
-      a.className = 'text-xs underline';
-      a.textContent = '下载';
-      actions.appendChild(a);
-    }
-    if (item.html_url){
-      const b = document.createElement('a');
-      b.href = item.html_url;
-      b.target = '_blank';
-      b.rel = 'noreferrer';
-      b.className = 'text-xs underline';
-      b.textContent = '在 GitHub 查看';
-      actions.appendChild(b);
-    }
-    if (item.type !== 'dir' && item.download_url){
-      const view = document.createElement('button');
-      view.className = 'text-xs px-2 py-1 border rounded';
-      view.textContent = '预览';
-      view.onclick = () => openItem(item);
-      actions.appendChild(view);
-    }
-
-    right.appendChild(topRow);
-    right.appendChild(pathLine);
-    right.appendChild(actions);
-
-    card.appendChild(ic);
-    card.appendChild(right);
-    listingEl.appendChild(card);
+    right.appendChild(topRow); right.appendChild(pathLine); right.appendChild(actions);
+    card.appendChild(ic); card.appendChild(right); listingEl.appendChild(card);
   }
 }
 
-// open item: navigate if dir; preview if previewable; open raw otherwise
 async function openItem(item){
   if (item.type === 'dir'){
-    currentPath = item.path.replace(new RegExp(`^${OWNER}/${REPO}/?`), '').replace(/^\/+|\/+$/g,'');
+    // api returns item.path like "folder" or "owner/repo/folder" for some cases; normalize
+    currentPath = item.path ? item.path.replace(new RegExp(`^${OWNER}/${REPO}/?`), '').replace(/^\/+|\/+$/g,'') : item.name;
     await loadPath(currentPath);
     return;
   }
 
-  // image preview
+  // image preview (use download_url)
   if (item.download_url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name)){
     showPreview({ type:'image', src: item.download_url, name: item.name });
     return;
@@ -238,102 +172,69 @@ async function openItem(item){
 
   // text preview
   if (item.download_url && /\.(md|txt|json|js|jsx|ts|tsx|py|html|css|java|c|cpp)$/i.test(item.name)){
-    try{
-      showLoadingPreview('加载中...');
+    showLoadingPreview('加载中...');
+    try {
       const r = await fetch(item.download_url);
       const text = await r.text();
       showPreview({ type:'text', content: text, name: item.name });
-    }catch(e){
+    } catch(e) {
       showPreview({ type:'text', content: '无法加载文件：' + (e.message||e), name: item.name });
     }
     return;
   }
 
-  // otherwise open raw url
+  // fallback: open raw download
   if (item.download_url) window.open(item.download_url, '_blank');
 }
 
-// preview modal handling
-const previewModal = $('previewModal');
-const previewContent = $('previewContent');
-const previewTitle = $('previewTitle');
-const previewOpenNew = $('previewOpenNew');
-$('previewClose').onclick = () => hidePreview();
+// preview modal
+const previewModal = $('previewModal'), previewContent = $('previewContent'), previewTitle = $('previewTitle'), previewOpenNew = $('previewOpenNew');
+$('previewClose').onclick = ()=> hidePreview();
 
-function showLoadingPreview(msg='加载中...'){
-  previewTitle.textContent = '预览';
-  previewContent.innerHTML = `<div class="text-center py-10 text-gray-600">${escapeHtml(msg)}</div>`;
-  previewOpenNew.classList.add('hidden');
-  previewModal.classList.remove('hidden');
-}
+function showLoadingPreview(msg='加载中...'){ previewTitle.textContent='预览'; previewContent.innerHTML=`<div class="text-center py-10 text-gray-600">${msg}</div>`; previewOpenNew.classList.add('hidden'); previewModal.classList.remove('hidden'); }
 function showPreview({type, src, content, name}){
-  previewTitle.textContent = name || '预览';
-  previewContent.innerHTML = '';
-  previewOpenNew.classList.add('hidden');
-
-  if (type === 'image'){
-    const img = document.createElement('img');
-    img.src = src;
-    img.alt = name || '';
-    img.className = 'max-h-[70vh] mx-auto';
-    previewContent.appendChild(img);
-    previewOpenNew.href = src;
-    previewOpenNew.classList.remove('hidden');
-  } else if (type === 'text'){
-    const pre = document.createElement('pre');
-    pre.className = 'whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto';
-    pre.textContent = content || '';
-    previewContent.appendChild(pre);
-  } else {
-    previewContent.textContent = '不支持的预览类型';
-  }
+  previewTitle.textContent = name || '预览'; previewContent.innerHTML=''; previewOpenNew.classList.add('hidden');
+  if (type === 'image'){ const img=document.createElement('img'); img.src=src; img.alt=name||''; img.className='max-h-[70vh] mx-auto'; previewContent.appendChild(img); previewOpenNew.href=src; previewOpenNew.classList.remove('hidden'); }
+  else if (type === 'text'){ const pre=document.createElement('pre'); pre.className='whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto'; pre.textContent=content||''; previewContent.appendChild(pre); }
+  else previewContent.textContent='不支持的预览类型';
   previewModal.classList.remove('hidden');
 }
-function hidePreview(){
-  previewModal.classList.add('hidden');
-  previewContent.innerHTML = '';
-}
+function hidePreview(){ previewModal.classList.add('hidden'); previewContent.innerHTML=''; }
 
-// search & refresh handlers
-$('refreshBtn').onclick = () => loadPath(currentPath);
-$('search').addEventListener('input', (e) => {
+// search & refresh
+$('refreshBtn').onclick = ()=> loadPath(currentPath);
+$('search').addEventListener('input', (e)=> {
   const q = e.target.value.trim().toLowerCase();
-  if (!currentItems || currentItems.length === 0) return renderList();
+  if (!currentItems || currentItems.length===0) return renderList();
   const filtered = currentItems.filter(i => i.name.toLowerCase().includes(q));
-  // temporarily render filtered
   listingEl.innerHTML = '';
-  if (filtered.length === 0){ emptyEl.classList.remove('hidden'); } else { emptyEl.classList.add('hidden'); }
+  if (filtered.length === 0) emptyEl.classList.remove('hidden'); else emptyEl.classList.add('hidden');
   for (const item of filtered){
-    const clone = Object.assign({}, item);
-    // build card similarly (quick reuse by calling small function)
-    const sizeText = clone.type === 'dir' ? '文件夹' : ( clone.size !== undefined ? niceSize(clone.size) : '-' );
-    const card = document.createElement('div');
-    card.className = 'p-3 border rounded flex items-start gap-3 hover:shadow-sm bg-white';
-    const ic = document.createElement('div'); ic.className = 'text-3xl'; ic.textContent = iconFor(clone);
-    const right = document.createElement('div'); right.className = 'flex-1';
-    const topRow = document.createElement('div'); topRow.className = 'flex justify-between items-start gap-3';
-    const nameBtn = document.createElement('button'); nameBtn.className = 'text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
-    nameBtn.textContent = clone.name; nameBtn.onclick = () => openItem(clone);
+    // reuse small render (same as above)
+    const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
+    const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
+    const ic = document.createElement('div'); ic.className='text-3xl'; ic.textContent = iconFor(item);
+    const right = document.createElement('div'); right.className='flex-1';
+    const topRow = document.createElement('div'); topRow.className='flex justify-between items-start gap-3';
+    const nameBtn = document.createElement('button'); nameBtn.className='text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
+    nameBtn.textContent = item.name; nameBtn.onclick = ()=> openItem(item);
     const meta = document.createElement('div'); meta.className='text-xs text-gray-500'; meta.textContent=sizeText;
     topRow.appendChild(nameBtn); topRow.appendChild(meta);
-    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent=clone.path||'';
+    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent = item.path || '';
     const actions = document.createElement('div'); actions.className='mt-2 flex gap-3';
-    if (clone.download_url){ const a = document.createElement('a'); a.href=clone.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
-    if (clone.html_url){ const b = document.createElement('a'); b.href=clone.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
-    if (clone.type !== 'dir' && clone.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = () => openItem(clone); actions.appendChild(view); }
+    if (item.download_url){ const a=document.createElement('a'); a.href = item.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
+    if (item.html_url){ const b=document.createElement('a'); b.href=item.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
+    if (item.type !== 'dir' && item.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = ()=> openItem(item); actions.appendChild(view); }
     right.appendChild(topRow); right.appendChild(pathLine); right.appendChild(actions);
-    card.appendChild(ic); card.appendChild(right);
-    listingEl.appendChild(card);
+    card.appendChild(ic); card.appendChild(right); listingEl.appendChild(card);
   }
 });
 
 // initial load
 loadPath('');
 
-// keyboard: Esc to close preview
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') hidePreview();
-});
+// Esc closes preview
+document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') hidePreview(); });
 </script>
 </body>
 </html>
