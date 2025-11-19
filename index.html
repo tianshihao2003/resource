@@ -3,343 +3,265 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>我的资源库 · tianshihao2003/resource</title>
-
-  <!-- Tailwind 快速样式 -->
+  <title>Drive 风格 · 我的资源库</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .modal-backdrop { background: rgba(0,0,0,0.65); }
+    /* 微调，让界面更像 Drive 风格 */
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .appbar { height:64px; }
+    .sidebar { width:240px; }
+    .card-hover:hover { box-shadow: 0 6px 18px rgba(13, 17, 23, 0.08); transform: translateY(-2px); }
+    .modal-backdrop { background: rgba(0,0,0,0.55); }
     .truncate-2 { display: -webkit-box; -webkit-line-clamp:2; -webkit-box-orient: vertical; overflow: hidden; }
-    .card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
-    #pwBox { width:90%; max-width:420px; background:white; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.25); padding:20px; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen text-gray-900">
-  <!-- 密码门（用 style.display 控制显示/隐藏） -->
-  <div id="pwGate" style="display:flex; align-items:center; justify-content:center; position:fixed; inset:0; z-index:9999;">
-    <div class="absolute inset-0 modal-backdrop"></div>
-    <div id="pwBox" class="relative z-10">
-      <div class="flex items-center gap-3 mb-4">
-        <!-- 使用你上传的本地图片路径作为 logo URL -->
-        <img src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
-        <div>
-          <h2 class="text-lg font-semibold">请输入访问密码</h2>
-          <p class="text-sm text-gray-500">输入正确密码后才能查看资源。</p>
-        </div>
-      </div>
+<body class="bg-gray-100 min-h-screen text-gray-900">
 
-      <div class="mb-3">
-        <input id="passwordInput" type="password" placeholder="输入密码" class="w-full border rounded px-3 py-2" />
+<!-- 密码门（保留） -->
+<div id="pwGate" style="display:flex; align-items:center; justify-content:center; position:fixed; inset:0; z-index:60;">
+  <div class="absolute inset-0 modal-backdrop"></div>
+  <div class="relative z-10 bg-white rounded-lg shadow-lg p-6 w-[420px]">
+    <div class="flex items-center gap-4 mb-4">
+      <img src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
+      <div>
+        <h2 class="text-lg font-semibold">请输入访问密码</h2>
+        <p class="text-sm text-gray-500">输入正确密码后即可进入你的资源库（客户端简单门）。</p>
       </div>
-
-      <div class="flex items-center justify-between gap-3">
-        <label class="text-sm text-gray-600 flex items-center gap-2">
-          <input id="remember" type="checkbox" /> 记住我（本地保存）
-        </label>
-        <div class="flex gap-2">
-          <button id="pwCancel" class="px-3 py-2 border rounded text-sm">取消</button>
-          <button id="pwSubmit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm">进入</button>
-        </div>
-      </div>
-
-      <p id="pwError" class="text-sm text-red-600 mt-3" style="display:none"></p>
     </div>
+    <input id="passwordInput" type="password" placeholder="输入密码" class="w-full border rounded px-3 py-2 mb-3" />
+    <div class="flex items-center justify-between">
+      <label class="text-sm text-gray-600 flex items-center gap-2"><input id="remember" type="checkbox"> 记住我</label>
+      <div class="flex gap-2">
+        <button id="pwCancel" class="px-3 py-2 border rounded">取消</button>
+        <button id="pwSubmit" class="bg-blue-600 text-white px-4 py-2 rounded">进入</button>
+      </div>
+    </div>
+    <p id="pwError" class="text-sm text-red-600 mt-3" style="display:none"></p>
   </div>
+</div>
 
-  <!-- 主站内容（在通过密码后显示） -->
-  <div id="site" style="display:none">
-    <div class="max-w-6xl mx-auto p-6">
-      <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-        <div class="flex items-center gap-4">
-          <img id="siteLogo" src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-12 h-12 rounded border" onerror="this.style.display='none'">
-          <div>
-            <h1 class="text-2xl font-semibold">我的资源库</h1>
-            <p class="text-sm text-gray-600">仓库：<span class="font-mono">tianshihao2003 / resource</span> — 像网盘一样浏览与预览（静态前端版）</p>
-          </div>
-        </div>
-
-        <div class="flex gap-2 items-center w-full sm:w-auto">
-          <input id="search" class="border rounded px-3 py-2 text-sm w-full sm:w-72" placeholder="搜索文件或文件夹（按名字）" />
-          <button id="refreshBtn" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded text-sm">刷新</button>
-        </div>
-      </header>
-
-      <nav id="breadcrumbs" class="text-sm text-gray-600 mb-4"></nav>
-
-      <main>
-        <div id="error" class="text-red-600 mb-3"></div>
-
-        <section id="listing" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3"></section>
-        <div id="empty" class="text-center text-gray-500 py-10" style="display:none">此目录为空或没有匹配的文件。</div>
-      </main>
-
-      <footer class="mt-6 text-sm text-gray-500">
-        提示：此静态页面直接调用 GitHub 公共 API 获取目录（无后端 token）。若仓库为私有或访问量大，请改用代理/Worker 方式以避免速率限制和暴露凭证。
-      </footer>
-    </div>
-
-    <!-- Preview modal -->
-    <div id="previewModal" class="fixed inset-0 flex items-center justify-center" style="display:none">
-      <div class="absolute inset-0 modal-backdrop"></div>
-      <div class="relative z-10 max-w-4xl w-full bg-white rounded shadow p-4 max-h-[85vh] overflow-auto">
-        <div class="flex justify-between items-center mb-3">
-          <div class="font-medium" id="previewTitle">预览</div>
-          <div class="flex gap-2">
-            <a id="previewOpenNew" class="text-sm underline" target="_blank" rel="noreferrer" style="display:none">在新窗口打开</a>
-            <button id="previewClose" class="text-sm px-3 py-1 border rounded">关闭</button>
-          </div>
-        </div>
-        <div id="previewContent"></div>
+<!-- 应用主体 -->
+<div id="app" style="display:none">
+  <!-- Appbar -->
+  <header class="appbar bg-white shadow-sm flex items-center px-4">
+    <div class="flex items-center gap-4">
+      <button id="hamburger" class="p-2 rounded hover:bg-gray-100"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <img src="/mnt/data/6629db86-c4a6-4b32-a321-973962865e0d.png" alt="logo" class="w-9 h-9 rounded" onerror="this.style.display='none'">
+      <div class="ml-1">
+        <div class="text-sm font-semibold">我的资源库</div>
+        <div class="text-xs text-gray-500">tianshihao2003 / resource</div>
       </div>
     </div>
+
+    <div class="flex-1 px-6">
+      <div class="relative">
+        <input id="search" class="w-full border rounded-full px-4 py-2 pl-10 text-sm" placeholder="搜索文件或文件夹（按名字）" />
+        <div class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button id="viewToggle" class="px-3 py-2 border rounded text-sm">网格</button>
+      <button id="refreshBtn" class="px-3 py-2 border rounded text-sm">刷新</button>
+      <div class="flex items-center gap-2">
+        <button class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm">TS</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex">
+    <!-- sidebar -->
+    <aside id="sidebar" class="sidebar bg-white border-r p-4 hidden sm:block">
+      <nav class="space-y-2">
+        <button class="w-full flex items-center gap-3 p-2 rounded hover:bg-gray-50 text-sm font-medium">📁 我的云盘</button>
+        <button class="w-full flex items-center gap-3 p-2 rounded hover:bg-gray-50 text-sm">⭐ 收藏</button>
+        <button class="w-full flex items-center gap-3 p-2 rounded hover:bg-gray-50 text-sm">🕘 最近</button>
+      </nav>
+      <div class="mt-6 text-xs text-gray-500">提示：静态版本会调用 GitHub 公共 API。</div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 p-6">
+      <!-- toolbar -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <nav id="breadcrumbs" class="text-sm text-gray-600"></nav>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="sortSelect" class="border rounded px-2 py-1 text-sm">
+            <option value="name">按名称</option>
+            <option value="type">按类型</option>
+          </select>
+          <button id="newFolder" class="px-3 py-2 bg-green-600 text-white rounded text-sm">新建文件夹</button>
+        </div>
+      </div>
+
+      <!-- content list/grid -->
+      <div id="contentArea">
+        <div id="listingGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+        <div id="listingList" class="hidden"></div>
+        <div id="empty" class="text-center text-gray-500 py-10 hidden">此目录为空。</div>
+      </div>
+    </main>
   </div>
+</div>
+
+<!-- 预览模态 -->
+<div id="previewModal" class="fixed inset-0 flex items-center justify-center" style="display:none; z-index:80;">
+  <div class="absolute inset-0 modal-backdrop"></div>
+  <div class="relative z-10 bg-white rounded shadow p-4 max-w-3xl w-full max-h-[85vh] overflow-auto">
+    <div class="flex justify-between items-center mb-3">
+      <div id="previewTitle" class="font-medium"></div>
+      <div class="flex gap-2">
+        <a id="previewOpenNew" class="underline text-sm" target="_blank" rel="noreferrer">在新窗口打开</a>
+        <button id="previewClose" class="px-3 py-1 border rounded">关闭</button>
+      </div>
+    </div>
+    <div id="previewContent"></div>
+  </div>
+</div>
 
 <script>
-/*
-  修复说明：
-  - 把解锁状态始终保存到 localStorage（刷新后仍保持已解锁），避免 sessionStorage 在刷新后丢失导致文件消失的情况。
-  - 保持密码为 0824（你要求的）。
-  注意：这是客户端密码门，前端可见（不是安全认证）。如需更安全方式，我可以帮你做 Worker Secret 版。
+/* Drive 风格 UI + 功能实现（静态前端版）
+   - 密码（客户端）仍为 0824
+   - 使用你的公开仓库 GitHub API 列表
+   - Grid / List view 切换、搜索、预览
 */
-
-const PASSWORD = '0824'; // <- 你要的密码
+const PASSWORD = '0824';
 const STORAGE_KEY = 'repo_unlocked_v1';
+const OWNER = 'tianshihao2003';
+const REPO = 'resource';
+const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
 
-// 存储 / 检查解锁状态（改为使用 localStorage，保证刷新仍保留）
-function setUnlocked(remember) {
-  try {
-    // 不论 remember 与否，都写入 localStorage（以便刷新后仍然保持）
-    // 如果你希望“仅本次会话有效”，我可以改回 sessionStorage。
-    localStorage.setItem(STORAGE_KEY, '1');
-  } catch(e){}
-}
-function isUnlocked() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch(e){}
-  return false;
-}
-function clearUnlocked() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
-}
-
-// DOM 元素
+// DOM
 const pwGate = document.getElementById('pwGate');
 const passwordInput = document.getElementById('passwordInput');
 const pwSubmit = document.getElementById('pwSubmit');
 const pwCancel = document.getElementById('pwCancel');
 const pwError = document.getElementById('pwError');
 const rememberCb = document.getElementById('remember');
-const site = document.getElementById('site');
-
-function showGate() {
-  pwError.style.display = 'none';
-  passwordInput.value = '';
-  pwGate.style.display = 'flex';
-  site.style.display = 'none';
-  setTimeout(()=>passwordInput.focus(), 50);
-}
-function hideGate() {
-  pwGate.style.display = 'none';
-  site.style.display = 'block';
-  pwError.style.display = 'none';
-}
-
-// 校验密码
-function tryPassword(remember) {
-  const v = (passwordInput.value || '').trim();
-  if (!v) { pwError.textContent = '请输入密码'; pwError.style.display = 'block'; return; }
-  if (v === PASSWORD) {
-    setUnlocked(remember);
-    hideGate();
-    initApp();
-  } else {
-    pwError.textContent = '密码错误，请重试';
-    pwError.style.display = 'block';
-  }
-}
-
-// 事件绑定
-pwCancel.onclick = () => { passwordInput.value = ''; pwError.style.display = 'none'; };
-pwSubmit.onclick = () => tryPassword(rememberCb.checked);
-passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPassword(rememberCb.checked); });
-
-// 如果已解锁，直接显示并初始化；否则显示门
-if (isUnlocked()) {
-  site.style.display = 'block';
-  pwGate.style.display = 'none';
-  // 延迟一点以确保 DOM 完全准备好（通常没必要，但更稳健）
-  setTimeout(()=>initApp(), 50);
-} else {
-  showGate();
-}
-
-/* ===================== 主站 JS ===================== */
-
-const OWNER = 'tianshihao2003';
-const REPO  = 'resource';
-const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/`;
-
-const $ = id => document.getElementById(id);
-const listingEl = $('listing'), breadcrumbsEl = $('breadcrumbs'), errorEl = $('error'), emptyEl = $('empty');
+const app = document.getElementById('app');
+const searchInput = document.getElementById('search');
+const refreshBtn = document.getElementById('refreshBtn');
+const viewToggle = document.getElementById('viewToggle');
+const listingGrid = document.getElementById('listingGrid');
+const listingList = document.getElementById('listingList');
+const emptyEl = document.getElementById('empty');
+const breadcrumbsEl = document.getElementById('breadcrumbs');
+const previewModal = document.getElementById('previewModal');
+const previewContent = document.getElementById('previewContent');
+const previewTitle = document.getElementById('previewTitle');
+const previewOpenNew = document.getElementById('previewOpenNew');
+const previewClose = document.getElementById('previewClose');
+const hamburger = document.getElementById('hamburger');
+const sidebar = document.getElementById('sidebar');
 
 let currentPath = '';
 let currentItems = [];
+let viewMode = 'grid'; // grid or list
 
-function niceSize(bytes){
-  if (bytes === 0) return '0B';
-  if (!bytes && bytes !== 0) return '-';
-  const u = ['B','KB','MB','GB'];
-  let i=0, n=bytes;
-  while(n>=1024 && i<u.length-1){ n/=1024; i++; }
-  return Math.round(n*10)/10 + u[i];
+function setUnlocked(remember) {
+  try { localStorage.setItem(STORAGE_KEY, '1'); } catch(e){}
 }
-function iconFor(item){
-  if (item.type === 'dir') return '📁';
-  const ext = (item.name.split('.').pop()||'').toLowerCase();
-  if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼️';
-  if (['mp4','mov','webm','mkv'].includes(ext)) return '🎞️';
-  if (['mp3','wav','ogg'].includes(ext)) return '🎵';
-  if (['pdf'].includes(ext)) return '📕';
-  if (['zip','tar','gz','rar'].includes(ext)) return '🗜️';
-  if (['md','txt','json','js','py','html','css','java','c','cpp'].includes(ext)) return '📄';
-  return '📦';
+function isUnlocked() { try { return localStorage.getItem(STORAGE_KEY) === '1'; } catch(e) { return false; } }
+
+function showGate() { pwError.style.display='none'; passwordInput.value=''; pwGate.style.display='flex'; app.style.display='none'; setTimeout(()=>passwordInput.focus(),50); }
+function hideGate() { pwGate.style.display='none'; app.style.display='block'; }
+
+function tryPassword(remember){ const v=(passwordInput.value||'').trim(); if(!v){ pwError.textContent='请输入密码'; pwError.style.display='block'; return; } if(v===PASSWORD){ setUnlocked(remember); hideGate(); initApp(); } else { pwError.textContent='密码错误'; pwError.style.display='block'; } }
+
+pwCancel.onclick = ()=>{ passwordInput.value=''; pwError.style.display='none'; };
+pwSubmit.onclick = ()=> tryPassword(rememberCb.checked);
+passwordInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') tryPassword(rememberCb.checked); });
+
+if(isUnlocked()){ hideGate(); setTimeout(()=>initApp(),50); } else { showGate(); }
+
+/* Utility */
+function niceSize(bytes){ if(bytes===0) return '0B'; if(!bytes && bytes!==0) return '-'; const u=['B','KB','MB','GB']; let i=0,n=bytes; while(n>=1024&&i<u.length-1){n/=1024;i++;} return Math.round(n*10)/10+u[i]; }
+function iconFor(name,type){ if(type==='dir') return '📁'; const ext=(name.split('.').pop()||'').toLowerCase(); if(['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼️'; if(['mp4','mov','webm','mkv'].includes(ext)) return '🎞️'; if(['mp3','wav','ogg'].includes(ext)) return '🎵'; if(['pdf'].includes(ext)) return '📕'; if(['zip','tar','gz','rar'].includes(ext)) return '🗜️'; return '📄'; }
+
+/* Fetch contents */
+async function fetchContents(path){ const url = API_BASE + encodeURIComponent(path).replace(/%2F/g,'/'); const res = await fetch(url,{ headers:{ Accept:'application/vnd.github.v3+json' } }); if(res.status===404) throw new Error('路径不存在或仓库不可访问（可能是私有仓库）。'); if(res.status===403) throw new Error('访问被限制：可能触发 GitHub API 限制。'); if(!res.ok) throw new Error('GitHub API 错误：'+res.status); return res.json(); }
+
+async function loadPath(path){ currentPath = path||''; try{ listingGrid.innerHTML=''; listingList.innerHTML=''; emptyEl.classList.add('hidden'); document.getElementById('error')?.remove(); const data = await fetchContents(path); const arr = Array.isArray(data)?data:[data]; arr.sort((a,b)=> a.type===b.type? a.name.localeCompare(b.name) : a.type==='dir' ? -1:1); currentItems = arr; renderBreadcrumbs(); renderItems(); }catch(e){ showError(e.message||'加载失败'); currentItems=[]; listingGrid.innerHTML=''; listingList.innerHTML=''; }
 }
 
-async function loadPath(path){
-  errorEl.textContent = '';
-  listingEl.innerHTML = '';
-  emptyEl.style.display = 'none';
+function showError(msg){ const el = document.getElementById('error') || document.createElement('div'); el.id='error'; el.className='text-red-600 mb-3'; el.textContent=msg; const main = document.querySelector('main'); if(main) main.prepend(el); }
 
-  const url = API_BASE + encodeURIComponent(path).replace(/%2F/g,'/');
-  try{
-    const res = await fetch(url, { headers: { Accept: 'application/vnd.github.v3+json' } });
-    if (res.status === 404) throw new Error('路径不存在或仓库不可访问（可能是私有仓库）。');
-    if (res.status === 403) throw new Error('访问被限制：可能触发 GitHub API 限制。');
-    if (!res.ok) throw new Error('GitHub API 错误：' + res.status);
-    const data = await res.json();
-    const arr = Array.isArray(data) ? data : [data];
-    arr.sort((a,b)=> a.type===b.type ? a.name.localeCompare(b.name) : a.type==='dir' ? -1:1);
-    currentItems = arr;
-    renderList();
-    renderBreadcrumbs();
-  } catch(e) {
-    errorEl.textContent = e.message || '加载失败';
-    currentItems = [];
-    listingEl.innerHTML = '';
+function renderBreadcrumbs(){ const parts = currentPath? currentPath.split('/').filter(Boolean):[]; const crumbs=[{name:'我的云盘', path:''}, ...parts.map((p,i)=>({name:p,path:parts.slice(0,i+1).join('/')}))]; breadcrumbsEl.innerHTML = crumbs.map((c,i)=>`<button data-path="${c.path}" class="text-sm text-gray-600 hover:underline mr-2">${c.name}${i<crumbs.length-1?' /':''}</button>`).join(''); breadcrumbsEl.querySelectorAll('button[data-path]').forEach(btn=>btn.onclick=()=>loadPath(btn.dataset.path)); }
+
+function renderItems(){ listingGrid.innerHTML=''; listingList.innerHTML=''; if(!currentItems||currentItems.length===0){ emptyEl.classList.remove('hidden'); return; } emptyEl.classList.add('hidden');
+  for(const item of currentItems){ const name = item.name; const size = item.size; const type = item.type; const icon = iconFor(name,type);
+    // grid card
+    const card = document.createElement('div'); card.className='bg-white p-4 rounded card-hover hover:shadow-md';
+    card.innerHTML = `
+      <div class="flex flex-col h-full">
+        <div class="flex items-start justify-between">
+          <div class="text-4xl">${icon}</div>
+          <div class="text-xs text-gray-500">${type==='dir'?'文件夹':(size?niceSize(size):'-')}</div>
+        </div>
+        <div class="mt-3 flex-1">
+          <div class="font-medium truncate">${name}</div>
+          <div class="text-xs text-gray-500 mt-1 truncate">${item.path||''}</div>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-xs">
+          <div class="flex gap-2">
+            ${item.download_url?`<a href="${item.download_url}" target="_blank" rel="noreferrer" class="underline">下载</a>`:''}
+            ${item.html_url?`<a href="${item.html_url}" target="_blank" rel="noreferrer" class="underline">在 GitHub 查看</a>`:''}
+          </div>
+          ${item.type==='dir'?`<button data-path="${item.path}" class="open-btn px-2 py-1 border rounded text-xs">打开</button>`:`<button data-path="${item.path}" class="preview-btn px-2 py-1 border rounded text-xs">预览</button>`}
+        </div>
+      </div>
+    `;
+    listingGrid.appendChild(card);
+
+    // list row
+    const row = document.createElement('div'); row.className='bg-white p-3 rounded flex items-center justify-between gap-3';
+    row.innerHTML = `
+      <div class="flex items-center gap-3">
+        <div class="text-2xl">${icon}</div>
+        <div>
+          <div class="font-medium">${name}</div>
+          <div class="text-xs text-gray-500">${item.path||''}</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-gray-500">
+        <div>${type==='dir'?'文件夹':(size?niceSize(size):'-')}</div>
+        <div class="flex gap-2">
+          ${item.download_url?`<a href="${item.download_url}" target="_blank" rel="noreferrer" class="underline">下载</a>`:''}
+          ${item.html_url?`<a href="${item.html_url}" target="_blank" rel="noreferrer" class="underline">在 GitHub 查看</a>`:''}
+          ${item.type==='dir'?`<button data-path="${item.path}" class="open-btn px-2 py-1 border rounded text-xs">打开</button>`:`<button data-path="${item.path}" class="preview-btn px-2 py-1 border rounded text-xs">预览</button>`}
+        </div>
+      </div>
+    `;
+    listingList.appendChild(row);
   }
+  attachItemHandlers();
 }
 
-function renderBreadcrumbs(){
-  const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
-  const crumbs = [{name:'root', path:''}].concat(parts.map((p,i)=>({name:p, path: parts.slice(0,i+1).join('/')})));
-  breadcrumbsEl.innerHTML = crumbs.map((c,i)=>`<button data-path="${c.path}" class="hover:underline mr-2">${c.name}${i<crumbs.length-1?' /':''}</button>`).join('');
-  breadcrumbsEl.querySelectorAll('button[data-path]').forEach(btn=>btn.onclick=()=>{ currentPath = btn.dataset.path; loadPath(currentPath); });
-}
+function attachItemHandlers(){ document.querySelectorAll('.open-btn').forEach(b=>b.onclick=()=>{ const p=b.getAttribute('data-path'); const normalized = p.replace(new RegExp(`^${OWNER}/${REPO}/?`),'').replace(/^\/+|\/+$/g,''); loadPath(normalized); }); document.querySelectorAll('.preview-btn').forEach(b=>b.onclick=async()=>{ const p=b.getAttribute('data-path'); const item = currentItems.find(x=>x.path===p||x.name===p); if(!item) return; if(/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name)){ showPreviewImage(item.download_url,item.name); } else { try{ showPreviewLoading(); const r = await fetch(item.download_url); const txt = await r.text(); showPreviewText(txt,item.name); }catch(e){ showPreviewText('无法加载：'+(e.message||e),item.name); } } }); }
 
-function renderList(){
-  listingEl.innerHTML = '';
-  if (!currentItems || currentItems.length === 0){ emptyEl.style.display = 'block'; return; }
-  emptyEl.style.display = 'none';
+function showPreviewLoading(){ previewTitle.textContent='加载中...'; previewContent.innerHTML='<div class="text-center py-10 text-gray-600">加载中…</div>'; previewOpenNew.style.display='none'; previewModal.style.display='flex'; }
+function showPreviewImage(src,name){ previewTitle.textContent=name; previewContent.innerHTML=`<img src="${src}" alt="${name}" class="max-h-[70vh] mx-auto"/>`; previewOpenNew.href=src; previewOpenNew.style.display='inline'; previewModal.style.display='flex'; }
+function showPreviewText(text,name){ previewTitle.textContent=name; previewContent.innerHTML=`<pre class="whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto">${escapeHtml(text)}</pre>`; previewOpenNew.style.display='none'; previewModal.style.display='flex'; }
+function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  for (const item of currentItems){
-    const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
-    const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
-    const ic = document.createElement('div'); ic.className='text-3xl'; ic.textContent = iconFor(item);
-    const right = document.createElement('div'); right.className='flex-1';
-    const topRow = document.createElement('div'); topRow.className='flex justify-between items-start gap-3';
-    const nameBtn = document.createElement('button'); nameBtn.className='text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
-    nameBtn.textContent = item.name; nameBtn.onclick = ()=> openItem(item);
-    const meta = document.createElement('div'); meta.className='text-xs text-gray-500'; meta.textContent=sizeText;
-    topRow.appendChild(nameBtn); topRow.appendChild(meta);
-    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent = item.path || '';
-    const actions = document.createElement('div'); actions.className='mt-2 flex gap-3';
-    if (item.download_url){ const a=document.createElement('a'); a.href = item.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
-    if (item.html_url){ const b=document.createElement('a'); b.href=item.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
-    if (item.type !== 'dir' && item.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = ()=> openItem(item); actions.appendChild(view); }
+previewClose.onclick = ()=>{ previewModal.style.display='none'; previewContent.innerHTML=''; }
 
-    right.appendChild(topRow); right.appendChild(pathLine); right.appendChild(actions);
-    card.appendChild(ic); card.appendChild(right); listingEl.appendChild(card);
-  }
-}
+// search
+searchInput.addEventListener('input', (e)=>{ const q=e.target.value.trim().toLowerCase(); if(!currentItems) return; if(!q) { renderItems(); return; } const filtered = currentItems.filter(i=>i.name.toLowerCase().includes(q)); const saved = currentItems; currentItems = filtered; renderItems(); currentItems = saved; });
 
-async function openItem(item){
-  if (item.type === 'dir'){
-    currentPath = item.path ? item.path.replace(new RegExp(`^${OWNER}/${REPO}/?`), '').replace(/^\/+|\/+$/g,'') : item.name;
-    await loadPath(currentPath);
-    return;
-  }
+// view toggle
+viewToggle.onclick = ()=>{ viewMode = viewMode==='grid'?'list':'grid'; if(viewMode==='grid'){ listingGrid.classList.remove('hidden'); listingList.classList.add('hidden'); viewToggle.textContent='网格'; } else { listingGrid.classList.add('hidden'); listingList.classList.remove('hidden'); viewToggle.textContent='列表'; } };
 
-  // image preview
-  if (item.download_url && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name)){
-    showPreview({ type:'image', src: item.download_url, name: item.name });
-    return;
-  }
+// refresh
+refreshBtn.onclick = ()=> loadPath(currentPath);
 
-  // text preview
-  if (item.download_url && /\.(md|txt|json|js|jsx|ts|tsx|py|html|css|java|c|cpp)$/i.test(item.name)){
-    showLoadingPreview('加载中...');
-    try {
-      const r = await fetch(item.download_url);
-      const text = await r.text();
-      showPreview({ type:'text', content: text, name: item.name });
-    } catch(e) {
-      showPreview({ type:'text', content: '无法加载文件：' + (e.message||e), name: item.name });
-    }
-    return;
-  }
+// hamburger (mobile)
+hamburger.onclick = ()=>{ if(sidebar.style.display==='block') sidebar.style.display='none'; else sidebar.style.display='block'; };
 
-  if (item.download_url) window.open(item.download_url, '_blank');
-}
-
-// preview modal
-const previewModal = $('previewModal'), previewContent = $('previewContent'), previewTitle = $('previewTitle'), previewOpenNew = $('previewOpenNew');
-$('previewClose').onclick = ()=> hidePreview();
-
-function showLoadingPreview(msg='加载中...'){ previewTitle.textContent='预览'; previewContent.innerHTML=`<div class="text-center py-10 text-gray-600">${msg}</div>`; previewOpenNew.style.display='none'; previewModal.style.display='flex'; }
-function showPreview({type, src, content, name}){
-  previewTitle.textContent = name || '预览'; previewContent.innerHTML=''; previewOpenNew.style.display='none';
-  if (type === 'image'){ const img=document.createElement('img'); img.src=src; img.alt=name||''; img.className='max-h-[70vh] mx-auto'; previewContent.appendChild(img); previewOpenNew.href=src; previewOpenNew.style.display='inline'; }
-  else if (type === 'text'){ const pre=document.createElement('pre'); pre.className='whitespace-pre-wrap text-sm bg-gray-100 p-3 rounded max-h-[70vh] overflow-auto'; pre.textContent=content||''; previewContent.appendChild(pre); }
-  else previewContent.textContent='不支持的预览类型';
-  previewModal.style.display='flex';
-}
-function hidePreview(){ previewModal.style.display='none'; previewContent.innerHTML=''; }
-
-// search & refresh
-$('refreshBtn').onclick = ()=> loadPath(currentPath);
-$('search').addEventListener('input', (e)=> {
-  const q = e.target.value.trim().toLowerCase();
-  if (!currentItems || currentItems.length===0) return renderList();
-  const filtered = currentItems.filter(i => i.name.toLowerCase().includes(q));
-  listingEl.innerHTML = '';
-  if (filtered.length === 0) emptyEl.style.display = 'block'; else emptyEl.style.display = 'none';
-  for (const item of filtered){
-    const sizeText = item.type === 'dir' ? '文件夹' : ( item.size !== undefined ? niceSize(item.size) : '-' );
-    const card = document.createElement('div'); card.className='p-3 border rounded flex items-start gap-3 card bg-white';
-    const ic = document.createElement('div'); ic.className='text-3xl'; ic.textContent = iconFor(item);
-    const right = document.createElement('div'); right.className='flex-1';
-    const topRow = document.createElement('div'); topRow.className='flex justify-between items-start gap-3';
-    const nameBtn = document.createElement('button'); nameBtn.className='text-left font-medium truncate text-sm'; nameBtn.style.padding='0';
-    nameBtn.textContent = item.name; nameBtn.onclick = ()=> openItem(item);
-    const meta = document.createElement('div'); meta.className='text-xs text-gray-500'; meta.textContent=sizeText;
-    topRow.appendChild(nameBtn); topRow.appendChild(meta);
-    const pathLine = document.createElement('div'); pathLine.className='text-xs text-gray-500 mt-1 truncate'; pathLine.textContent = item.path || '';
-    const actions = document.createElement('div'); actions.className='mt-2 flex gap-3';
-    if (item.download_url){ const a=document.createElement('a'); a.href = item.download_url; a.target='_blank'; a.rel='noreferrer'; a.className='text-xs underline'; a.textContent='下载'; actions.appendChild(a); }
-    if (item.html_url){ const b=document.createElement('a'); b.href=item.html_url; b.target='_blank'; b.rel='noreferrer'; b.className='text-xs underline'; b.textContent='在 GitHub 查看'; actions.appendChild(b); }
-    if (item.type !== 'dir' && item.download_url){ const view = document.createElement('button'); view.className='text-xs px-2 py-1 border rounded'; view.textContent='预览'; view.onclick = ()=> openItem(item); actions.appendChild(view); }
-    right.appendChild(topRow); right.appendChild(pathLine); right.appendChild(actions);
-    card.appendChild(ic); card.appendChild(right); listingEl.appendChild(card);
-  }
-});
-
-// 初始化应用（在通过密码后调用）
-function initApp(){
-  site.style.display = 'block';
-  // 保证 DOM 渲染后再加载目录
-  setTimeout(()=> loadPath(''), 50);
-}
+// initial load
+function initApp(){ app.style.display='block'; loadPath(''); }
 
 </script>
 </body>
