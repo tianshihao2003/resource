@@ -33,7 +33,9 @@
       </div>
 
       <div class="flex items-center justify-between gap-3">
-        <label class="text-sm text-gray-600 flex items-center gap-2"><input id="remember" type="checkbox" /> 记住我（本地保存）</label>
+        <label class="text-sm text-gray-600 flex items-center gap-2">
+          <input id="remember" type="checkbox" /> 记住我（本地保存）
+        </label>
         <div class="flex gap-2">
           <button id="pwCancel" class="px-3 py-2 border rounded text-sm">取消</button>
           <button id="pwSubmit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm">进入</button>
@@ -94,32 +96,34 @@
 
 <script>
 /*
-  修复了 modal 不消失的问题（使用 style.display）。
-  客户端密码：0824
-  注意：客户端密码只能做简单访问门；若需要真正安全，请用 Worker/后端鉴权。
+  修复说明：
+  - 把解锁状态始终保存到 localStorage（刷新后仍保持已解锁），避免 sessionStorage 在刷新后丢失导致文件消失的情况。
+  - 保持密码为 0824（你要求的）。
+  注意：这是客户端密码门，前端可见（不是安全认证）。如需更安全方式，我可以帮你做 Worker Secret 版。
 */
-const PASSWORD = '0824'; // <- 已替换为你要的密码
+
+const PASSWORD = '0824'; // <- 你要的密码
 const STORAGE_KEY = 'repo_unlocked_v1';
 
-// 存储 / 检查解锁状态
+// 存储 / 检查解锁状态（改为使用 localStorage，保证刷新仍保留）
 function setUnlocked(remember) {
   try {
-    if (remember) localStorage.setItem(STORAGE_KEY, '1');
-    else sessionStorage.setItem(STORAGE_KEY, '1');
+    // 不论 remember 与否，都写入 localStorage（以便刷新后仍然保持）
+    // 如果你希望“仅本次会话有效”，我可以改回 sessionStorage。
+    localStorage.setItem(STORAGE_KEY, '1');
   } catch(e){}
 }
 function isUnlocked() {
   try {
-    if (localStorage.getItem(STORAGE_KEY) === '1') return true;
-    if (sessionStorage.getItem(STORAGE_KEY) === '1') return true;
+    return localStorage.getItem(STORAGE_KEY) === '1';
   } catch(e){}
   return false;
 }
 function clearUnlocked() {
-  try { localStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem(STORAGE_KEY); } catch(e){}
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
 }
 
-// DOM 元素（一次性获取）
+// DOM 元素
 const pwGate = document.getElementById('pwGate');
 const passwordInput = document.getElementById('passwordInput');
 const pwSubmit = document.getElementById('pwSubmit');
@@ -148,7 +152,6 @@ function tryPassword(remember) {
   if (v === PASSWORD) {
     setUnlocked(remember);
     hideGate();
-    // 初始化应用（通过密码后才加载）
     initApp();
   } else {
     pwError.textContent = '密码错误，请重试';
@@ -161,16 +164,17 @@ pwCancel.onclick = () => { passwordInput.value = ''; pwError.style.display = 'no
 pwSubmit.onclick = () => tryPassword(rememberCb.checked);
 passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryPassword(rememberCb.checked); });
 
-// 若已解锁，直接显示并初始化；否则显示门
+// 如果已解锁，直接显示并初始化；否则显示门
 if (isUnlocked()) {
   site.style.display = 'block';
   pwGate.style.display = 'none';
-  initApp();
+  // 延迟一点以确保 DOM 完全准备好（通常没必要，但更稳健）
+  setTimeout(()=>initApp(), 50);
 } else {
   showGate();
 }
 
-/* ===================== 主站 JS（和之前静态页面逻辑相同） ===================== */
+/* ===================== 主站 JS ===================== */
 
 const OWNER = 'tianshihao2003';
 const REPO  = 'resource';
@@ -332,9 +336,9 @@ $('search').addEventListener('input', (e)=> {
 
 // 初始化应用（在通过密码后调用）
 function initApp(){
-  // 显示站点（在 hideGate 中已设置，但为了确保也在这里设置）
   site.style.display = 'block';
-  loadPath('');
+  // 保证 DOM 渲染后再加载目录
+  setTimeout(()=> loadPath(''), 50);
 }
 
 </script>
